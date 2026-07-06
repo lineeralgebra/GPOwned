@@ -1786,17 +1786,8 @@ displayName={display_name}
 
     def get_machine_name(self,args, domain):
         if args.dc_ip is not None:
-            s = SMBConnection(args.dc_ip, args.dc_ip)
-        else:
-            s = SMBConnection(domain, domain)
-        try:
-            s.login('', '')
-        except Exception:
-            if s.getServerName() == '':
-                raise Exception('Error while anonymous logging into %s' % domain)
-        else:
-            s.logoff()
-        return s.getServerName()
+            return args.dc_ip
+        return domain
 
 def parse_args():
     parser = argparse.ArgumentParser(add_help = True, description = "GPO Helper - @TheXC3LL")
